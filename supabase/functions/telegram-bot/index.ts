@@ -45,7 +45,26 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  // Only accept POST requests
+  // 1. Handle Training Route
+  const url = new URL(req.url);
+  if (url.pathname.endsWith('/train')) {
+    try {
+      console.log('--- STARTING REMOTE TRAINING ---');
+      const container = getContainer();
+      await container.indexDatabaseUseCase.execute();
+      return new Response(JSON.stringify({ ok: true, message: 'Training complete!' }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (error) {
+      console.error('Training failed:', error);
+      return new Response(JSON.stringify({ ok: false, error: (error as Error).message }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+  }
+
+  // 2. Only accept POST requests for Telegram Webhook
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,

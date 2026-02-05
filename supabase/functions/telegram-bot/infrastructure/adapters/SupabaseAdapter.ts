@@ -4,7 +4,7 @@
  * Uses SERVICE ROLE KEY to bypass RLS
  */
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { IDatabaseGateway, QueryResult } from '../../domain/interfaces/IDatabaseGateway.ts';
+import { IDatabaseGateway, QueryResult, TableDefinition } from '../../domain/interfaces/IDatabaseGateway.ts';
 import { SCHEMA_CONTEXT } from '../config/schema-context.ts';
 
 export class SupabaseAdapter implements IDatabaseGateway {
@@ -45,5 +45,34 @@ export class SupabaseAdapter implements IDatabaseGateway {
 
   async getSchemaContext(): Promise<string> {
     return SCHEMA_CONTEXT;
+  }
+
+  /**
+   * Introspection: Fetch real-time schema from Postgres
+   */
+  async getLiveSchema(): Promise<TableDefinition[]> {
+    // This query gets all tables in 'public' schema, their columns, and their comments
+    const query = `
+      SELECT 
+        t.table_name as "tableName",
+        array_agg(c.column_name::text) as "columns",
+        obj_description(pgc.oid, 'pg_class') as "description"
+      FROM information_schema.tables t
+      JOIN information_schema.columns c ON t.table_name = c.table_name
+      JOIN pg_class pgc ON t.table_name = pgc.relname
+      JOIN pg_namespace pgn ON pgc.relnamespace = pgn.oid AND pgn.nspname = t.table_schema
+      WHERE t.table_schema = 'public' 
+        AND t.table_type = 'BASE TABLE'
+      GROUP BY t.table_name, pgc.oid;
+    `;
+
+    // We use the rpc bypass to execute this raw SQL
+    // You'll need to update your 'execute_bot_query' to allow this or create a new RPC
+    const { data, error } = await this.client.rpc('execute_bot_query', {
+      query_text: query.trim() // Xóa khoảng trắng ở đầu và cuối
+    });
+
+    if (error) throw new Error(`Schema introspection failed: ${error.message}`);
+    return data as TableDefinition[];
   }
 }

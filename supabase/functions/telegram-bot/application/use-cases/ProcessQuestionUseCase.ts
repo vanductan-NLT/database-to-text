@@ -1,11 +1,12 @@
 /**
  * Process Question Use Case - Application Layer
- * Orchestrates the flow: Question → SQL → Execute → Format
+ * Updated with Dynamic Context Lookup (Phase 2)
  */
 import { Query } from '../../domain/entities/Query.ts';
 import { IAIProvider } from '../../domain/interfaces/IAIProvider.ts';
 import { IDatabaseGateway } from '../../domain/interfaces/IDatabaseGateway.ts';
 import { IMessageGateway } from '../../domain/interfaces/IMessageGateway.ts';
+import { IMetadataRepository } from '../../domain/interfaces/IMetadataRepository.ts';
 import { SqlValidator } from '../../domain/validators/SqlValidator.ts';
 import { QuestionDTO, QueryResultDTO } from '../dtos/index.ts';
 import { formatQueryResult } from '../../shared/formatters/TelegramFormatter.ts';
@@ -15,12 +16,12 @@ export class ProcessQuestionUseCase {
     private readonly aiProvider: IAIProvider,
     private readonly databaseGateway: IDatabaseGateway,
     private readonly messageGateway: IMessageGateway,
+    private readonly metadataRepo: IMetadataRepository,
   ) {}
 
   async execute(dto: QuestionDTO): Promise<QueryResultDTO> {
     const query = new Query(dto.chatId, dto.question);
 
-    // 1. Validate question
     if (!query.status.isValid) {
       return {
         success: false,
@@ -30,21 +31,31 @@ export class ProcessQuestionUseCase {
     }
 
     try {
-      // 2. Send typing indicator
       await this.messageGateway.sendTypingAction(dto.chatId);
 
-      // 3. Get schema context
-      const schemaContext = await this.databaseGateway.getSchemaContext();
+      // --- PHASE 2: SMART CONTEXT LOOKUP ---
+      // 1. Find relevant tables based on keywords in the question
+      const relevantTables = await this.metadataRepo.searchRelevantTables(dto.question);
+      
+      let dynamicSchemaContext = "";
+      if (relevantTables.length > 0) {
+        dynamicSchemaContext = relevantTables.map(t => 
+          `TABLE: ${t.tableName}\nDESCRIPTION: ${t.description}\nCOLUMNS: ${t.sampleColumns.join(', ')}\nRELATIONS: ${t.relationships.join(', ')}\nSCHEMA: ${t.fullSchema}\n`
+        ).join("\n---\n");
+      } else {
+        // Fallback to minimal fixed context if no tables matched
+        dynamicSchemaContext = await this.databaseGateway.getSchemaContext();
+      }
 
-      // 4. Generate SQL using AI
+      // 2. Generate SQL using the dynamic context
       const aiResponse = await this.aiProvider.generateSql({
-        schemaContext,
+        schemaContext: dynamicSchemaContext,
         question: query.question,
       });
 
       query.setSql(aiResponse.sql);
 
-      // 5. Validate SQL (READ-only)
+      // 3. Validate SQL (READ-only)
       const validation = SqlValidator.validate(aiResponse.sql);
       if (!validation.isValid) {
         return {
@@ -55,7 +66,7 @@ export class ProcessQuestionUseCase {
         };
       }
 
-      // 6. Execute query
+      // 4. Execute query
       const result = await this.databaseGateway.executeQuery(aiResponse.sql);
 
       if (result.error) {
@@ -69,7 +80,9 @@ export class ProcessQuestionUseCase {
 
       query.setResult(result.data);
 
-      // 7. Format response
+      // --- AUDIT LOGGING (Placeholder for User's Table 2) ---
+      // In a full implementation, we would call an AuditRepository here
+
       const formattedResponse = formatQueryResult(result.data, result.rowCount);
 
       return {

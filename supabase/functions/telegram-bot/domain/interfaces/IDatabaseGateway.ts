@@ -2,6 +2,12 @@
  * Database Gateway Interface - Domain Layer
  * Abstraction for database operations
  */
+export interface TableDefinition {
+  tableName: string;
+  columns: string[];
+  description?: string;
+}
+
 export interface QueryResult {
   readonly data: unknown[];
   readonly rowCount: number;
@@ -18,4 +24,9 @@ export interface IDatabaseGateway {
    * Get database schema for AI context
    */
   getSchemaContext(): Promise<string>;
+
+  /**
+   * Fetch live schema definitions from Database
+   */
+  getLiveSchema(): Promise<TableDefinition[]>;
 }
