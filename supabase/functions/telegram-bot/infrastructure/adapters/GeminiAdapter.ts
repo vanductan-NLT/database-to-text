@@ -33,14 +33,11 @@ export class GeminiAdapter implements IAIProvider {
   }
 
   async generateSql(request: GenerateSqlRequest): Promise<GenerateSqlResponse> {
-    const prompt = `${SYSTEM_PROMPT}
-
-DATABASE SCHEMA:
-${request.schemaContext}
-
-USER QUESTION: ${request.question}
-
-SQL QUERY:`;
+    const isJsonRequest = request.question.includes('JSON');
+    
+    const prompt = isJsonRequest 
+      ? `CONTEXT: ${request.schemaContext}\n\nTASK: ${request.question}`
+      : `${SYSTEM_PROMPT}\n\nDATABASE SCHEMA:\n${request.schemaContext}\n\nUSER QUESTION: ${request.question}\n\nSQL QUERY:`;
 
     const result = await this.model.generateContent(prompt);
     const response = result.response;

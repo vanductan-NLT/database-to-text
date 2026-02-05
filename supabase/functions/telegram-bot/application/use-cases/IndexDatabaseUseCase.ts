@@ -44,12 +44,16 @@ export class IndexDatabaseUseCase {
       try {
         const aiResponse = await this.aiProvider.generateSql({
           schemaContext: "Professional Data Analyst Training Mode.",
-          question: `Analyze this DB table for a SQL Bot.
-          TABLE: ${table.tableName}
+          question: `Analyze this DB table and return a JSON object with this exact structure:
+          { 
+            "description": "Short business explanation of this table", 
+            "keywords": ["synonym1", "synonym2", "related_term"] 
+          }
+          
+          TABLE NAME: ${table.tableName}
           COLUMNS: ${table.columns.join(', ')}
           
-          RETURN JSON ONLY:
-          { "description": "short description", "keywords": ["keyword1", "keyword2"] }`,
+          RETURN ONLY THE JSON BLOCK.`,
         });
 
         const aiData = JSON.parse(aiResponse.sql);
