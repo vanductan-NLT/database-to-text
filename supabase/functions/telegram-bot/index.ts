@@ -51,8 +51,13 @@ Deno.serve(async (req: Request) => {
     try {
       console.log('--- STARTING REMOTE TRAINING ---');
       const container = getContainer();
-      await container.indexDatabaseUseCase.execute();
-      return new Response(JSON.stringify({ ok: true, message: 'Training complete!' }), {
+      const status = await container.indexDatabaseUseCase.execute();
+      
+      const message = status.remaining > 0 
+        ? `Trained ${status.trained} tables. ${status.remaining} remaining. PLEASE REFRESH THIS PAGE TO CONTINUE.`
+        : "✅ All tables trained successfully!";
+
+      return new Response(JSON.stringify({ ok: true, message, status }), {
         headers: { 'Content-Type': 'application/json' },
       });
     } catch (error) {

@@ -1,6 +1,6 @@
 /**
  * Gemini Adapter - Infrastructure Layer
- * Implements IAIProvider using Google Gemini 2.5 Flash
+ * Implements IAIProvider using Google Gemini 1.5 Flash
  */
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { IAIProvider, GenerateSqlRequest, GenerateSqlResponse } from '../../domain/interfaces/IAIProvider.ts';
@@ -18,12 +18,11 @@ RULES:
 IMPORTANT: Return ONLY the SQL query, nothing else.`;
 
 export class GeminiAdapter implements IAIProvider {
-  private readonly model;
-
   constructor(apiKey: string) {
+    console.log('🤖 Initializing GeminiAdapter with model: gemini-1.5-flash-latest');
     const genAI = new GoogleGenerativeAI(apiKey);
     this.model = genAI.getGenerativeModel({ 
-      model: 'gemini-2.0-flash',
+      model: 'gemini-1.5-flash-latest',
       generationConfig: {
         temperature: 0.1, 
         maxOutputTokens: 1024,

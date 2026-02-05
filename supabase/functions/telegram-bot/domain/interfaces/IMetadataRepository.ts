@@ -13,6 +13,11 @@ export interface TableMetadata {
 
 export interface IMetadataRepository {
   /**
+   * Get list of tables already indexed
+   */
+  getIndexedTableNames(): Promise<string[]>;
+
+  /**
    * Save or update table metadata (bulk)
    */
   saveMetadata(metadata: TableMetadata[]): Promise<void>;

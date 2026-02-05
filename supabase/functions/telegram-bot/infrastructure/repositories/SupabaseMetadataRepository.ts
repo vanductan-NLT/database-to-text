@@ -8,6 +8,15 @@ import { IMetadataRepository, TableMetadata } from '../../domain/interfaces/IMet
 export class SupabaseMetadataRepository implements IMetadataRepository {
   constructor(private readonly client: SupabaseClient) {}
 
+  async getIndexedTableNames(): Promise<string[]> {
+    const { data, error } = await this.client
+      .from('bot_table_metadata')
+      .select('table_name');
+    
+    if (error) throw error;
+    return (data || []).map(row => row.table_name);
+  }
+
   async saveMetadata(metadata: TableMetadata[]): Promise<void> {
     const records = metadata.map(m => ({
       table_name: m.tableName,

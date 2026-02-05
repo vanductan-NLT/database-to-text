@@ -1,6 +1,6 @@
 /**
- * Index Database Use Case - Application Layer (THE RELATIVE TRAINING)
- * Scans real database metadata and trains AI to understand it.
+ * Index Database Use Case - Application Layer
+ * "Cuốn chiếu" mode: Trains 5 tables per request to avoid Timeouts and Rate Limits.
  */
 import { IAIProvider } from '../../domain/interfaces/IAIProvider.ts';
 import { IMetadataRepository, TableMetadata } from '../../domain/interfaces/IMetadataRepository.ts';
@@ -13,38 +13,45 @@ export class IndexDatabaseUseCase {
     private readonly metadataRepo: IMetadataRepository,
   ) {}
 
-  async execute(): Promise<void> {
-    console.log('🚀 Starting LIVE Database Training...');
+  async execute(): Promise<{ trained: number; remaining: number }> {
+    console.log('🚀 Checking Training Status...');
     
-    // 1. Fetch Real Objects from Database
-    const tables = await this.databaseGateway.getLiveSchema();
-    console.log(`📡 Found ${tables.length} tables in public schema.`);
-    
-    // Safety check: Filter out metadata/logs tables from training themselves
-    const filteredTables = tables.filter(t => !['bot_table_metadata', 'bot_query_audit_log'].includes(t.tableName));
-    console.log(`🧠 Tables to analyze: ${filteredTables.length}`);
+    // 1. Get Live Tables vs Already Indexed Tables
+    const allTables = await this.databaseGateway.getLiveSchema();
+    const indexedTableNames = await this.metadataRepo.getIndexedTableNames();
+
+    // 2. Filter tables that NEED training
+    const tablesToTrain = allTables.filter(t => 
+      !indexedTableNames.includes(t.tableName) && 
+      !['bot_table_metadata', 'bot_query_audit_log'].includes(t.tableName)
+    );
+
+    if (tablesToTrain.length === 0) {
+      console.log('✅ All tables are already trained!');
+      return { trained: 0, remaining: 0 };
+    }
+
+    // 3. Take only the first 5 tables to avoid Rate Limit and Timeout
+    const batchSize = 5;
+    const batch = tablesToTrain.slice(0, batchSize);
+    console.log(`🧠 Training batch of ${batch.length} tables. Remaining: ${tablesToTrain.length - batch.length}`);
 
     const metadatas: TableMetadata[] = [];
 
-    for (const table of filteredTables) {
-      console.log(`✨ AI Training for table: ${table.tableName}...`);
-
-      // 2. Ask AI to analyze the LIVE schema data
-      const aiResponse = await this.aiProvider.generateSql({
-        schemaContext: "You are a professional Data Analyst helping to train a SQL Bot.",
-        question: `Based on the following real database metadata, generate:
-        1. A human-friendly description of what this table is for.
-        2. A list of 10 keywords/synonyms that users might use when asking about this data.
-        
-        TABLE: ${table.tableName}
-        COLUMNS: ${table.columns.join(', ')}
-        EXISTING COMMENT: ${table.description || 'none'}
-        
-        RESPONSE FORMAT (JSON ONLY):
-        { "description": "...", "keywords": ["...", "..."] }`,
-      });
+    for (const table of batch) {
+      console.log(`✨ AI Analyzing: ${table.tableName}...`);
 
       try {
+        const aiResponse = await this.aiProvider.generateSql({
+          schemaContext: "Professional Data Analyst Training Mode.",
+          question: `Analyze this DB table for a SQL Bot.
+          TABLE: ${table.tableName}
+          COLUMNS: ${table.columns.join(', ')}
+          
+          RETURN JSON ONLY:
+          { "description": "short description", "keywords": ["keyword1", "keyword2"] }`,
+        });
+
         const aiData = JSON.parse(aiResponse.sql);
         metadatas.push({
           tableName: table.tableName,
@@ -55,18 +62,18 @@ export class IndexDatabaseUseCase {
           fullSchema: `TABLE ${table.tableName} (${table.columns.join(', ')})`,
         });
       } catch (e) {
-        console.error(`❌ Failed to train on table ${table.tableName}`, e);
+        console.error(`❌ Failed table ${table.tableName}:`, e);
       }
-
-      // --- CRITICAL FIX: Add delay to avoid Rate Limit (429) ---
-      // Free tier gemini-1.5-flash allows ~15 RPM. 
-      // 3 seconds delay between tables = ~20 requests per minute MAX.
-      console.log('⏳ Waiting 3s to respect API quota...');
-      await new Promise(resolve => setTimeout(resolve, 3000));
     }
 
-    // 3. Save to Metadata Table
-    await this.metadataRepo.saveMetadata(metadatas);
-    console.log(`✅ Training Complete. ${metadatas.length} tables indexed in Metadata Store.`);
+    // 4. Save this batch
+    if (metadatas.length > 0) {
+      await this.metadataRepo.saveMetadata(metadatas);
+    }
+
+    return { 
+      trained: metadatas.length, 
+      remaining: tablesToTrain.length - metadatas.length 
+    };
   }
 }
