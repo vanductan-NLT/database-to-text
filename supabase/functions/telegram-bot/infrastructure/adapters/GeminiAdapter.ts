@@ -23,16 +23,15 @@ export class GeminiAdapter implements IAIProvider {
   constructor(apiKey: string) {
     const genAI = new GoogleGenerativeAI(apiKey);
     this.model = genAI.getGenerativeModel({ 
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.0-flash',
       generationConfig: {
-        temperature: 0.1, // Low temperature for consistent SQL
+        temperature: 0.1, 
         maxOutputTokens: 1024,
       },
     });
   }
 
   async generateSql(request: GenerateSqlRequest): Promise<GenerateSqlResponse> {
-    console.log(`Generating SQL for question: ${request.question}`);
     const prompt = `${SYSTEM_PROMPT}
 
 DATABASE SCHEMA:
@@ -42,12 +41,9 @@ USER QUESTION: ${request.question}
 
 SQL QUERY:`;
 
-    try {
-      const result = await this.model.generateContent(prompt);
-      const response = result.response;
-      let sql = response.text().trim();
-      console.log('Gemini raw response text length:', sql.length);
-
+    const result = await this.model.generateContent(prompt);
+    const response = result.response;
+    let sql = response.text().trim();
 
     // Clean up: remove markdown code blocks if present
     if (sql.startsWith('```sql')) {
@@ -57,10 +53,5 @@ SQL QUERY:`;
     }
 
     return { sql: sql.trim() };
-    } catch (error) {
-      console.error('Gemini API Error:', error);
-      throw error;
-    }
   }
 }
-

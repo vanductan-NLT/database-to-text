@@ -57,6 +57,12 @@ export class IndexDatabaseUseCase {
       } catch (e) {
         console.error(`❌ Failed to train on table ${table.tableName}`, e);
       }
+
+      // --- CRITICAL FIX: Add delay to avoid Rate Limit (429) ---
+      // Free tier gemini-1.5-flash allows ~15 RPM. 
+      // 3 seconds delay between tables = ~20 requests per minute MAX.
+      console.log('⏳ Waiting 3s to respect API quota...');
+      await new Promise(resolve => setTimeout(resolve, 3000));
     }
 
     // 3. Save to Metadata Table

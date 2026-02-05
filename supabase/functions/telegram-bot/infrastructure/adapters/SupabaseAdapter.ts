@@ -63,7 +63,7 @@ export class SupabaseAdapter implements IDatabaseGateway {
       JOIN pg_namespace pgn ON pgc.relnamespace = pgn.oid AND pgn.nspname = t.table_schema
       WHERE t.table_schema = 'public' 
         AND t.table_type = 'BASE TABLE'
-      GROUP BY t.table_name, pgc.oid;
+      GROUP BY t.table_name, pgc.oid
     `;
 
     // We use the rpc bypass to execute this raw SQL
