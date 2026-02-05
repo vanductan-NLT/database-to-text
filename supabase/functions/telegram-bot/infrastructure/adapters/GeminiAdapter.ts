@@ -23,7 +23,7 @@ export class GeminiAdapter implements IAIProvider {
   constructor(apiKey: string) {
     const genAI = new GoogleGenerativeAI(apiKey);
     this.model = genAI.getGenerativeModel({ 
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       generationConfig: {
         temperature: 0.1, // Low temperature for consistent SQL
         maxOutputTokens: 1024,
