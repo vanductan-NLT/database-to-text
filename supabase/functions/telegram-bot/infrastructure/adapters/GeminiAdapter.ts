@@ -18,6 +18,8 @@ RULES:
 IMPORTANT: Return ONLY the SQL query, nothing else.`;
 
 export class GeminiAdapter implements IAIProvider {
+  private readonly model: any;
+
   constructor(apiKey: string) {
     console.log('🤖 Initializing GeminiAdapter with model: gemini-1.5-flash-latest');
     const genAI = new GoogleGenerativeAI(apiKey);
