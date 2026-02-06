@@ -55,15 +55,31 @@ export class SupabaseAdapter implements IDatabaseGateway {
     const query = `
       SELECT 
         t.table_name as "tableName",
-        array_agg(c.column_name::text) as "columns",
-        obj_description(pgc.oid, 'pg_class') as "description"
+        array_agg(DISTINCT c.column_name::text) as "columns",
+        obj_description(pgc.oid, 'pg_class') as "description",
+        COALESCE(
+          (
+            SELECT json_agg(relations)
+            FROM (
+              SELECT 
+                kcu.column_name as "column",
+                ccu.table_name as "referencedTable",
+                ccu.column_name as "referencedColumn"
+              FROM information_schema.key_column_usage kcu
+              JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name
+              JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = tc.constraint_name
+              WHERE tc.constraint_type = 'FOREIGN KEY' AND kcu.table_name = t.table_name
+            ) relations
+          ),
+          '[]'::json
+        ) as "relationships"
       FROM information_schema.tables t
       JOIN information_schema.columns c ON t.table_name = c.table_name
       JOIN pg_class pgc ON t.table_name = pgc.relname
       JOIN pg_namespace pgn ON pgc.relnamespace = pgn.oid AND pgn.nspname = t.table_schema
       WHERE t.table_schema = 'public' 
         AND t.table_type = 'BASE TABLE'
-      GROUP BY t.table_name, pgc.oid
+      GROUP BY t.table_name, pgc.oid;
     `;
 
     // We use the rpc bypass to execute this raw SQL

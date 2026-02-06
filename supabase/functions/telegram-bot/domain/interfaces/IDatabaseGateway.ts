@@ -2,10 +2,17 @@
  * Database Gateway Interface - Domain Layer
  * Abstraction for database operations
  */
+export interface TableRelationship {
+  column: string;
+  referencedTable: string;
+  referencedColumn: string;
+}
+
 export interface TableDefinition {
   tableName: string;
   columns: string[];
   description?: string;
+  relationships?: TableRelationship[];
 }
 
 export interface QueryResult {

@@ -13,8 +13,9 @@ export class IndexDatabaseUseCase {
     private readonly metadataRepo: IMetadataRepository,
   ) {}
 
-  async execute(): Promise<{ trained: number; remaining: number }> {
+  async execute(): Promise<{ trained: number; remaining: number; debug?: any }> {
     console.log('🚀 Checking Training Status...');
+    let lastRawResponse = '';
     
     // 1. Get Live Tables vs Already Indexed Tables
     const allTables = await this.databaseGateway.getLiveSchema();
@@ -47,26 +48,31 @@ export class IndexDatabaseUseCase {
           question: `Analyze this DB table and return a JSON object with this exact structure:
           { 
             "description": "Short business explanation of this table", 
-            "keywords": ["synonym1", "synonym2", "related_term"] 
+            "keywords": ["synonym1", "synonym2", "related_term"],
+            "relationships": ["connected to table X via column Y", "related to Z"]
           }
           
           TABLE NAME: ${table.tableName}
           COLUMNS: ${table.columns.join(', ')}
+          FOREIGN KEYS: ${JSON.stringify(table.relationships)}
           
           RETURN ONLY THE JSON BLOCK.`,
         });
 
+        lastRawResponse = aiResponse.sql;
         const aiData = JSON.parse(aiResponse.sql);
         metadatas.push({
           tableName: table.tableName,
           description: aiData.description,
           keywords: aiData.keywords,
           sampleColumns: table.columns,
-          relationships: [], 
-          fullSchema: `TABLE ${table.tableName} (${table.columns.join(', ')})`,
+          relationships: aiData.relationships || [], 
+          fullSchema: `TABLE ${table.tableName} (${table.columns.join(', ')}) | RELATIONS: ${JSON.stringify(table.relationships)}`,
         });
       } catch (e) {
-        console.error(`❌ Failed table ${table.tableName}:`, e);
+        const errorMessage = e instanceof Error ? e.message : String(e);
+        console.error(`❌ Failed table ${table.tableName}:`, errorMessage);
+        lastRawResponse = `ERROR: ${errorMessage}. RAW: ${lastRawResponse}`;
       }
     }
 
@@ -77,7 +83,8 @@ export class IndexDatabaseUseCase {
 
     return { 
       trained: metadatas.length, 
-      remaining: tablesToTrain.length - metadatas.length 
+      remaining: tablesToTrain.length - metadatas.length,
+      debug: lastRawResponse
     };
   }
 }
